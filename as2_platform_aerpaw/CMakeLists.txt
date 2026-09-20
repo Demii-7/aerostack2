@@ -34,11 +34,11 @@ include_directories(
 )
 
 set(SOURCE_CPP_FILES
-  src/${PROJECT_NAME}.cpp
+  src/aerpaw_platform.cpp
   src/ipc_bridge.cpp
 )
 
-add_executable(${PROJECT_NAME}_node src/${PROJECT_NAME}_node.cpp ${SOURCE_CPP_FILES})
+add_executable(${PROJECT_NAME}_node src/aerpaw_platform_node.cpp ${SOURCE_CPP_FILES})
 ament_target_dependencies(${PROJECT_NAME}_node ${PROJECT_DEPENDENCIES})
 target_link_libraries(${PROJECT_NAME}_node nlohmann_json::nlohmann_json)
 

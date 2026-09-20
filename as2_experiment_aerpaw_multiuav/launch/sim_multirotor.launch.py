@@ -17,7 +17,7 @@ def _as2_stack_nodes(ns, use_sim_time, params=None):
     motion_controller_pkg = get_package_share_directory('as2_motion_controller')
 
     state_estimator_config = os.path.join(
-        state_estimator_pkg, 'raw_odometry', 'config', 'plugin_default.yaml')
+        state_estimator_pkg, 'plugins', 'raw_odometry', 'config', 'plugin_default.yaml')
     motion_controller_config = os.path.join(motion_controller_pkg, 'config',
                                             'motion_controller_default.yaml')
 
@@ -52,7 +52,13 @@ def _as2_stack_nodes(ns, use_sim_time, params=None):
         parameters=[
             {'use_sim_time': use_sim_time},
             motion_controller_config,
-            {'plugin_name': 'pid_speed'},
+            {'plugin_name': 'pid_speed_controller'},
+            {'plugin_available_modes_config_file': os.path.join(
+                motion_controller_pkg, 'plugins', 'pid_speed_controller', 'config',
+                'available_modes.yaml')},
+            os.path.join(
+                motion_controller_pkg, 'plugins', 'pid_speed_controller', 'config',
+                'controller_default.yaml'),
         ],
     ))
 
@@ -124,7 +130,8 @@ def _as2_stack_nodes(ns, use_sim_time, params=None):
 def get_nodes(context, *args, **kwargs):
     """Spawn N multirotor simulator platform nodes with the full AS2 stack."""
     num = int(LaunchConfiguration('num_drones').perform(context))
-    use_sim_time = LaunchConfiguration('use_sim_time').perform(context)
+    use_sim_time = str(LaunchConfiguration('use_sim_time').perform(
+        context)).strip().lower() in ('1', 'true', 'yes', 'on')
 
     sim_pkg = get_package_share_directory('as2_platform_multirotor_simulator')
     sim_config = os.path.join(sim_pkg, 'config/platform_config_file.yaml')
