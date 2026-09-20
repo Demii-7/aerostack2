@@ -8,6 +8,9 @@ backends.
 PLAN.md                                          original task specification
 HOST.md                                          Chameleon host access notes
 docs/run_and_test_requirements.txt               full prerequisite checklist
+docs/E2E_MANUAL.md                               end-to-end manual (Quick Start +
+                                                 parts on AERPAW, Aerostack2, the
+                                                 platform, your own experiment, runs)
 docs/README.md                                   this document
 
 as2_platform_aerpaw/
