@@ -44,7 +44,7 @@ stop (AS2 kill-switch semantics).  Documented limitation for real-hardware safet
 ## Package layout
 
 ```
-as2_platform_aerpaw/
+as2_aerial_platforms/as2_platform_aerpaw/
 ├── config/
 │   ├── control_modes.yaml        # HOVER / SPEED(yaw-speed) / POSITION(yaw-angle)
 │   └── platform_params.yaml      # default IPC ports, takeoff_altitude

@@ -204,7 +204,7 @@ Neither needs aerpawlib or a vehicle.
 ### 3.1 Packages
 
 ```
-as2_platform_aerpaw/                       the AERPAW platform
+as2_aerial_platforms/as2_platform_aerpaw/       the AERPAW platform
   src/aerpaw_platform.cpp                  AerpawPlatform : as2::AerialPlatform
   src/ipc_bridge.cpp / ipc_bridge.hpp      UDP JSON IPC (send command, recv telemetry)
   src/aerpaw_platform_node.cpp             executable entry point

@@ -13,7 +13,7 @@ docs/E2E_MANUAL.md                               end-to-end manual (Quick Start 
                                                  platform, your own experiment, runs)
 docs/README.md                                   this document
 
-as2_platform_aerpaw/
+as2_aerial_platforms/as2_platform_aerpaw/
     src/aerpaw_platform.cpp                      C++ AerialPlatform node
     src/ipc_bridge.cpp(.hpp)                     UDP JSON IPC (command + telemetry)
     include/as2_platform_aerpaw/aerpaw_platform.hpp
@@ -125,8 +125,8 @@ Done and working-deadline items are ticked; the rest are the remaining steps.
       Config A/SITL and adjust if needed.
 - [ ] (Optional) True AS2 emergency-stop semantics: current `kill` maps to
       disarm + stop_velocity — no irreversible motor-stop API in aerpawlib.
-- [ ] (Optional) Move package under `as2_aerial_platforms/` to match repo
-      convention (currently at repo root).
+- [x] (Optional) Move package under `as2_aerial_platforms/` to match repo
+      convention (DONE — now at `as2_aerial_platforms/as2_platform_aerpaw/`).
 
 ## Known limitations
 
