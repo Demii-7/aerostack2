@@ -1,0 +1,183 @@
+================================================================================
+ as2_platform_aerpaw - Requirements to Run and Test
+================================================================================
+
+Scope
+-----
+This document lists everything required to build, unit-test, and run the
+AERPAW Digital Twin platform adapter and its multi-UAV experiment:
+
+    - as2_platform_aerpaw              (C++ AerialPlatform + Python runner)
+    - as2_experiment_aerpaw_multiuav   (3-drone triangle-formation mission)
+
+It is split into three levels:
+
+    Level 1 - Build and unit-test the C++ platform  (minimum, no hardware)
+    Level 2 - Run Config A/B simulations            (Multirotor Simulator / Gazebo)
+    Level 3 - Run Config C on the AERPAW DT / SITL  (aerpawlib + MAVLink)
+
+----------------------------------------------------------------------------
+LEVEL 1 - BUILD AND UNIT-TEST (C++ platform only)
+----------------------------------------------------------------------------
+
+Operating system
+    Ubuntu 22.04 (Jammy). ROS 2 Humble is the supported distribution.
+    The host must have x86-64 or aarch64.
+
+Required toolchain
+    - g++ / clang++ (C++17)
+    - CMake >= 3.16
+    - make (or ninja)
+    - git
+
+ROS 2 Humble (full desktop or at least ros-base)
+    Install per https://docs.ros.org/en/humble/Installation.html
+    Required packages (pulled in by ros-base + ament):
+        rclcpp, rclcpp_action, rclcpp_components
+        nav_msgs, sensor_msgs, geometry_msgs, geographic_msgs(opt)
+        tf2, tf2_geometry_msgs
+        ament_cmake, ament_cmake_gtest
+        ament_index_cpp            (for the platform gtest)
+
+colcon
+    sudo apt install python3-colcon-common-extensions
+
+nlohmann-json
+    Used by ipc_bridge.hpp for JSON payloads.
+        sudo apt install nlohmann-json3-dev
+    (a `find_package(nlohmann_json REQUIRED)` is in CMakeLists.txt)
+
+gtest / gmock
+    Pulled in automatically by ament_cmake_gtest. If building manually:
+        sudo apt install libgtest-dev
+
+YAML parsing
+    libyaml-cpp (ament dependency of as2_core; required to parse
+    control_modes.yaml).
+
+Aerostack2 workspace (this repository)
+    Build the platform and its dependency packages:
+        colcon build --packages-up-to as2_platform_aerpaw
+        source install/setup.bash
+
+    This also builds: as2_msgs, as2_interfaces, as2_core, as2_python_api.
+
+Unit tests (no hardware, no simulator)
+    colcon test --packages-select as2_platform_aerpaw
+    colcon test-result --verbose
+
+    Tests:
+        - ipc_bridge_gtest   : verifies command/telemetry UDP round-trip on
+                                ephemeral localhost ports.
+        - aerpaw_platform_gtest : verifies the AerialPlatform node constructs
+                                with the shipped control_modes.yaml and
+                                platform_params.yaml.
+
+    NOTE: these do NOT require aerpawlib or any MAVLink endpoint.
+
+Quick alternative with pixi (no system ROS install)
+    The repository ships pixi.toml with a `humble` environment:
+        curl -fsSL https://pixi.sh/install.sh | sh
+        pixi install
+        pixi run -e humble colcon build --packages-up-to as2_platform_aerpaw
+        pixi run -e humble colcon test --packages-select as2_platform_aerpaw
+
+Resource envelope (for the aerostack2 dep build)
+    - 4+ GB free RAM recommended (use `-j2` if less)
+    - 10+ GB free disk for the build/install trees
+    - First build takes 10-30 min depending on cores.
+
+----------------------------------------------------------------------------
+LEVEL 2 - RUN CONFIG A / B (simulation, no AERPAW hardware)
+----------------------------------------------------------------------------
+
+Config A - AS2 Multirotor Simulator
+    Built-in AS2 simulator; no extra installation beyond Level 1.
+
+        ros2 launch as2_experiment_aerpaw_multiuav sim_multirotor.launch.py \
+            num_drones:=3
+
+    Brings up, per drone: platform node + raw_odometry state estimator +
+    pid_speed motion controller + arm/offboard/go_to/takeoff/land behaviors,
+    then the triangle_formation.py mission.
+
+Config B - Gazebo Harmonic
+    Requires the AS2 Gazebo stack for this repository version:
+        - as2_gazebo_assets  (world/models/bridges; in this workspace)
+        - as2_platform_gazebo
+        - gazebo-harmonic + ros-gz-bridge (installed via the pixi
+          `humble_gzharmonic` profile or apt gz packages)
+
+        ros2 launch as2_experiment_aerpaw_multiuav sim_gazebo.launch.py \
+            simulation_config_file:=/path/to/three_drone_world.yaml
+
+    A simulation YAML defining three drone models is required (see
+    as2_gazebo_assets docs). Per drone it launches: Gazebo bridges +
+    as2_platform_gazebo node + state estimator (ground_truth) + motion
+    controller + behaviors + mission.
+
+----------------------------------------------------------------------------
+LEVEL 3 - RUN CONFIG C (AERPAW Digital Twin / SITL via aerpawlib)
+----------------------------------------------------------------------------
+
+Python
+    Python 3.10+.
+
+aerpawlib (required for the runner process)
+        git clone https://github.com/AERPAW/aerpawlib.git
+        pip install -e "aerpawlib[sitl,dev]"
+        aerpawlib-setup-sitl          # first time only (downloads SITL)
+
+    The runner (aerpawlib_runner/aerpaw_as2_runner.py) is a BasicRunner
+    Script invoked via the aerpawlib CLI:
+        aerpawlib --api-version v2 --script <runner> --conn <url> \
+            --vehicle drone [--no-aerpaw-environment] --cmd-port ... --tel-port ...
+
+    NOTE: the C++ build does NOT depend on aerpawlib; only the Config C
+    runtime does.
+
+MAVLink endpoint - choose one
+    a) Local SITL (ArduPilot software-in-the-loop):
+           aerpawlib-setup-sitl already configures udpin://127.0.0.1:14550
+           Run:  ros2 launch as2_experiment_aerpaw_multiuav \
+                     aerpaw_digital_twin.launch.py use_aerpaw:=false
+    b) AERPAW Digital Twin / hardware (real E-VMs):
+           Provide per-drone MAVLink URLs:
+           ros2 launch as2_experiment_aerpaw_multiuav \
+                     aerpaw_digital_twin.launch.py \
+                     use_aerpaw:=true \
+                     conn_drone0:=udpin://10.14.X.X:14550 \
+                     conn_drone1:=udpin://10.14.X.Y:14550 \
+                     conn_drone2:=udpin://10.14.X.Z:14550
+
+Constraint (affects both a and b)
+    AERPAW testbed minimum takeoff altitude: 25 m.
+    Configured via `takeoff_altitude` in as2_platform_aerpaw/config/
+    platform_params.yaml (default 25.0).
+
+----------------------------------------------------------------------------
+OTHER / OPTIONAL
+----------------------------------------------------------------------------
+
+RViz2 monitoring:
+        ros2 run rviz2 rviz2
+    Topics of interest (per namespace, e.g. /drone0):
+        /drone0/sensor_measurements/odom   (nav_msgs/Odometry)
+        /drone0/sensor_measurements/imu    (sensor_msgs/Imu)
+        /drone0/sensor_measurements/gps    (sensor_msgs/NavSatFix)
+        /drone0/self_localization/*        (produced by the state estimator)
+
+GPU / visualization: not required for headless SITL or sim; RPM/overlays
+    libraries only needed for RViz.
+
+Known limitations (not blockers)
+    - ownKillSwitch() maps to disarm + stop_velocity (no true irreversible
+      ArduPilot emergency motor-stop in aerpawlib).
+    - aerpawlib v2 set_velocity is marked [NOT SUPPORTED] by the 2026 copter
+      filter; SPEED-mode testing is therefore best done on Config A first.
+    - Unit tests cannot be executed on a machine without ROS 2 Humble;
+      C++ compile and gtests require Level 1 to be satisfied.
+
+================================================================================
+END OF DOCUMENT
+================================================================================

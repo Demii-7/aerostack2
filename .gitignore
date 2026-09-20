@@ -85,3 +85,5 @@ pixi.lock
 # Misc
 files.txt
 **/files.txt
+
+.env

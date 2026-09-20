@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>as2_experiment_aerpaw_multiuav</name>
+  <version>1.1.3</version>
+  <description>Multi-UAV triangle formation experiment validated on Multirotor Simulator, Gazebo and AERPAW Digital Twin</description>
+
+  <maintainer email="cvar.upm3@gmail.com">CVAR-UPM</maintainer>
+
+  <license>BSD-3-Clause</license>
+
+  <exec_depend>as2_python_api</exec_depend>
+  <exec_depend>as2_platform_aerpaw</exec_depend>
+  <exec_depend>as2_platform_multirotor_simulator</exec_depend>
+  <exec_depend>as2_platform_gazebo</exec_depend>
+  <exec_depend>as2_gazebo_assets</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
