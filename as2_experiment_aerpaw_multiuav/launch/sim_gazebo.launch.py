@@ -15,6 +15,7 @@ from launch.actions import (
     ExecuteProcess,
     IncludeLaunchDescription,
     OpaqueFunction,
+    TimerAction,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -42,7 +43,7 @@ def _as2_stack_nodes(ns, use_sim_time):
              'base_frame': f'{ns}/base_link',
              'global_frame': f'{ns}/earth',
              'odom_frame': f'{ns}/odom'},
-            os.path.join(state_estimator_pkg, 'ground_truth', 'config', 'plugin_default.yaml'),
+            os.path.join(state_estimator_pkg, 'plugins', 'ground_truth', 'config', 'plugin_default.yaml'),
             {'plugin_name': 'ground_truth'},
         ],
     ))
@@ -58,7 +59,13 @@ def _as2_stack_nodes(ns, use_sim_time):
         parameters=[
             {'use_sim_time': use_sim_time},
             os.path.join(motion_controller_pkg, 'config', 'motion_controller_default.yaml'),
-            {'plugin_name': 'pid_speed'},
+            {'plugin_name': 'pid_speed_controller'},
+            {'plugin_available_modes_config_file': os.path.join(
+                motion_controller_pkg, 'plugins', 'pid_speed_controller', 'config',
+                'available_modes.yaml')},
+            os.path.join(
+                motion_controller_pkg, 'plugins', 'pid_speed_controller', 'config',
+                'controller_default.yaml'),
         ],
     ))
 
@@ -130,18 +137,24 @@ def get_all_actions(context, *args, **kwargs):
     """Build all launch actions for N Gazebo drones."""
     config_file = LaunchConfiguration('simulation_config_file').perform(context)
     num = int(LaunchConfiguration('num_drones').perform(context))
-    sim_time = LaunchConfiguration('use_sim_time').perform(context)
+    sim_time = str(LaunchConfiguration('use_sim_time').perform(
+        context)).strip().lower() in ('1', 'true', 'yes', 'on')
 
     gazebo_pkg = get_package_share_directory('as2_gazebo_assets')
     platform_pkg = get_package_share_directory('as2_platform_gazebo')
     mission_pkg = get_package_share_directory('as2_experiment_aerpaw_multiuav')
 
     actions = []
+    delayed = []
 
     # 1. Gazebo world + models + world/object bridges
     sim_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(gazebo_pkg, 'launch/launch_simulation.py')),
-        launch_arguments={'simulation_config_file': config_file}.items(),
+        launch_arguments={
+            'simulation_config_file': config_file,
+            'headless': LaunchConfiguration('headless').perform(context),
+            'verbose': LaunchConfiguration('verbose').perform(context),
+        }.items(),
     )
     actions.append(sim_launch)
 
@@ -156,39 +169,43 @@ def get_all_actions(context, *args, **kwargs):
                 'namespace': ns,
             }.items(),
         )
-        actions.append(drone_bridges)
+        delayed.append(drone_bridges)
 
         platform_control = os.path.join(platform_pkg, 'config/control_modes.yaml')
         platform_config = os.path.join(platform_pkg, 'config/platform_config_file.yaml')
 
-        actions.append(Node(
+        delayed.append(Node(
             package='as2_platform_gazebo',
             executable='as2_platform_gazebo_node',
             name='platform',
             namespace=ns,
             output='screen',
             emulate_tty=True,
-            parameters=[{
-                'use_sim_time': sim_time,
-                'control_modes_file': platform_control,
-                'cmd_vel_topic': f'/gz/{ns}/cmd_vel',
-                'arm_topic': f'/gz/{ns}/arm',
-                'acro_topic': f'/gz/{ns}/acro',
-            },
+            parameters=[
                 platform_config,
+                {
+                    'use_sim_time': sim_time,
+                    'control_modes_file': platform_control,
+                    'cmd_vel_topic': f'/gz/{ns}/cmd_vel',
+                    'arm_topic': f'/gz/{ns}/arm',
+                    'acro_topic': f'/gz/{ns}/acro',
+                    'enable_takeoff_platform': True,
+                    'enable_land_platform': True,
+                },
             ],
         ))
 
         # Full AS2 stack (state estimator, motion controller, behaviors)
-        actions.extend(_as2_stack_nodes(ns, sim_time))
+        delayed.extend(_as2_stack_nodes(ns, sim_time))
 
     # 3. Mission script
-    actions.append(ExecuteProcess(
+    delayed.append(ExecuteProcess(
         cmd=['python3', os.path.join(mission_pkg, 'missions/triangle_formation.py')],
         output='screen',
     ))
 
-    return actions
+    delay = float(os.environ.get('AS2_BRIDGE_DELAY', '12'))
+    return actions + [TimerAction(period=delay, actions=delayed)]
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -198,5 +215,9 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument('num_drones', default_value='3',
                               description='Number of drones'),
         DeclareLaunchArgument('use_sim_time', default_value='true'),
+        DeclareLaunchArgument('verbose', default_value='false',
+                              description='Verbose gz server (system load logs)'),
+        DeclareLaunchArgument('headless', default_value='true',
+                              description='Run gz server only (no GUI client)'),
         OpaqueFunction(function=get_all_actions),
     ])

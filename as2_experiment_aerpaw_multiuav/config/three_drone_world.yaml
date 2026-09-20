@@ -1,0 +1,18 @@
+world_name: empty
+origin:
+  latitude: 40.4168
+  longitude: -3.7038
+  altitude: 690.0
+drones:
+  - model_name: drone0
+    model_type: quadrotor_base
+    xyz: [0.0, 0.0, 0.05]
+    rpy: [0.0, 0.0, 0.0]
+  - model_name: drone1
+    model_type: quadrotor_base
+    xyz: [1.0, 0.0, 0.05]
+    rpy: [0.0, 0.0, 0.0]
+  - model_name: drone2
+    model_type: quadrotor_base
+    xyz: [0.5, 1.0, 0.05]
+    rpy: [0.0, 0.0, 0.0]

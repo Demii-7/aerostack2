@@ -51,7 +51,7 @@ def _as2_stack_nodes(ns, use_sim_time):
              'base_frame': f'{ns}/base_link',
              'global_frame': f'{ns}/earth',
              'odom_frame': f'{ns}/odom'},
-            os.path.join(state_estimator_pkg, 'raw_odometry', 'config', 'plugin_default.yaml'),
+            os.path.join(state_estimator_pkg, 'plugins', 'raw_odometry', 'config', 'plugin_default.yaml'),
             {'plugin_name': 'raw_odometry'},
         ],
     ))
@@ -67,7 +67,13 @@ def _as2_stack_nodes(ns, use_sim_time):
         parameters=[
             {'use_sim_time': use_sim_time},
             os.path.join(motion_controller_pkg, 'config', 'motion_controller_default.yaml'),
-            {'plugin_name': 'pid_speed'},
+            {'plugin_name': 'pid_speed_controller'},
+            {'plugin_available_modes_config_file': os.path.join(
+                motion_controller_pkg, 'plugins', 'pid_speed_controller', 'config',
+                'available_modes.yaml')},
+            os.path.join(
+                motion_controller_pkg, 'plugins', 'pid_speed_controller', 'config',
+                'controller_default.yaml'),
         ],
     ))
 
