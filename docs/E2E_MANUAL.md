@@ -7,6 +7,7 @@ From a fresh machine to a flying multi‑UAV experiment through the
 - Prerequisites → [`run_and_test_requirements.txt`](run_and_test_requirements.txt)
 - Bridge internals (IPC, frames, topics, modes, params) → [`as2_platform_aerpaw/README.md`](../as2_aerial_platforms/as2_platform_aerpaw/README.md)
 - The example mission + **per‑config run commands** → [`as2_experiment_aerpaw_multiuav/README.md`](../as2_experiment_aerpaw_multiuav/README.md)
+- **AERPAW VM bootstrap + QGC tunnel scripts** → [`deploy/`](../as2_aerial_platforms/as2_platform_aerpaw/deploy/README.md) (`cvm_setup.sh`, `qgc_tunnel.sh`)
 
 ---
 

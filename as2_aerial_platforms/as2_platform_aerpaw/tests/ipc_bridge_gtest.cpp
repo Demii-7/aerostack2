@@ -132,6 +132,40 @@ TEST_F(IpcBridgeTest, TelemetryReceivedAndStored)
   close(sock);
 }
 
+TEST_F(IpcBridgeTest, MeasurementIsTransportedVerbatim)
+{
+  IpcBridge bridge(cmd_port_, tel_port_);
+  bridge.start();
+
+  int sock = socket(AF_INET, SOCK_DGRAM, 0);
+  ASSERT_GE(sock, 0);
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  addr.sin_port = htons(tel_port_);
+
+  nlohmann::json m = {
+    {"type", "measurement"}, {"vehicle_id", "drone0"},
+    {"metrics", {{"sinr_db", 18.0}, {"rssi_dbm", -62.0}, {"throughput_mbps", 47.5}}},
+    {"ts", 555.0}
+  };
+  std::string msg = m.dump();
+  sendto(sock, msg.c_str(), msg.size(), 0,
+    reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr));
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  AdapterMeasurement meas = bridge.getMeasurement();
+  EXPECT_TRUE(meas.valid);
+  EXPECT_EQ(meas.vehicle_id, "drone0");
+  // payload is passed through as raw JSON, not interpreted by the adapter
+  EXPECT_NE(meas.payload_json.find("sinr_db"), std::string::npos);
+  EXPECT_NE(meas.payload_json.find("throughput_mbps"), std::string::npos);
+
+  bridge.stop();
+  close(sock);
+}
+
 }  // namespace aerpaw_platform
 
 int main(int argc, char * argv[])

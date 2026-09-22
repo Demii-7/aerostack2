@@ -1,4 +1,11 @@
-"""Launch file for N AERPAW platform drones on SITL/AERPAW DT."""
+"""Launch file for N AERPAW platform drones on SITL/AERPAW DT.
+
+NOTE (Stage-2 ownership): this file has *AeroStack2* spawn the *AERPAW*
+aerpawlib runner, so it is a DEVELOPER / local-SITL HARNESS ONLY.  In
+production AERPAW is the top-level experiment platform and starts AeroStack2 as
+a robotics subsystem (deploy/run_aerpaw_experiment.sh, or the runner's
+--as2-subsystem flag + as2_stack.launch.py).  See docs/ARCHITECTURE.md §Ownership.
+"""
 
 __authors__ = 'AERPAW Bridge'
 __copyright__ = 'Copyright (c) 2024 Universidad Politecnica de Madrid'
@@ -37,9 +44,11 @@ def spawn_drones(context, *args, **kwargs):
 
     actions = []
     for i in range(num_drones):
+        # Mirror of vehicle_identity.hpp (single source of truth in the adapter).
         ns = f'drone{i}'
-        cmd_port = str(15760 + i * 2)
-        tel_port = str(15761 + i * 2)
+        cmd_port = 15760 + i * 2
+        tel_port = 15761 + i * 2
+        backend = 'digital_twin' if use_aerpaw == 'true' else 'sitl'
 
         conn = conns[i] if conns[i] else f'udpin://127.0.0.1:{14550 + i * 10}'
 
@@ -51,13 +60,15 @@ def spawn_drones(context, *args, **kwargs):
             output='screen',
             emulate_tty=True,
             parameters=[
+                get_package_config_file(),
                 {
                     'use_sim_time': use_sim_time,
                     'control_modes_file': control_modes,
                     'ipc_cmd_port': cmd_port,
                     'ipc_tel_port': tel_port,
+                    'platform_backend': backend,
+                    'vehicle_id': ns,
                 },
-                get_package_config_file(),
             ]
         )
         actions.append(platform_node)
@@ -71,7 +82,8 @@ def spawn_drones(context, *args, **kwargs):
         ]
         if use_aerpaw != 'true':
             runner_cmd.append('--no-aerpaw-environment')
-        runner_cmd += ['--cmd-port', cmd_port, '--tel-port', tel_port]
+        runner_cmd += ['--cmd-port', str(cmd_port), '--tel-port', str(tel_port),
+                       '--vehicle-id', ns]
 
         actions.append(ExecuteProcess(
             cmd=runner_cmd,

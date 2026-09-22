@@ -5,3 +5,12 @@
     ipc_cmd_port: 15760  # UDP port for sending commands to Python runner
     ipc_tel_port: 15761  # UDP port for receiving telemetry from Python runner
     takeoff_altitude: 25.0  # Takeoff altitude in metres (min 25 on DT)
+    # AERPAW-side abstraction (adapter-internal; see adapter_types.hpp)
+    platform_backend: sitl  # sitl | digital_twin | physical
+    vehicle_id: ''  # AERPAW vehicle id; empty -> adopt from telemetry / launch ns
+    link_timeout: 1.0  # s of silence before the AERPAW link is declared LOST
+    # Online trajectory updates (Stage 11): forward a new POSITION reference when it
+    # changes by more than these, else at most every position_keepalive seconds.
+    position_update_min_distance: 0.5  # m
+    position_update_min_yaw: 0.1  # rad
+    position_keepalive: 0.5  # s

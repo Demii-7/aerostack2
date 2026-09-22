@@ -19,6 +19,7 @@ set(PROJECT_DEPENDENCIES
   geometry_msgs
   nav_msgs
   sensor_msgs
+  std_msgs
   tf2
 )
 
@@ -36,6 +37,8 @@ include_directories(
 set(SOURCE_CPP_FILES
   src/aerpaw_platform.cpp
   src/ipc_bridge.cpp
+  src/state_translation.cpp
+  src/command_translation.cpp
 )
 
 add_executable(${PROJECT_NAME}_node src/aerpaw_platform_node.cpp ${SOURCE_CPP_FILES})

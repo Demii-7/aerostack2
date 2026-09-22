@@ -33,6 +33,8 @@
 
 #include <cstring>
 #include <iostream>
+#include <limits>
+#include <thread>
 
 namespace aerpaw_platform
 {
@@ -99,24 +101,66 @@ void IpcBridge::start()
         buf[n] = '\0';
         try {
           auto j = nlohmann::json::parse(buf);
-          TelemetryState tel;
-          tel.lat = j.value("lat", 0.0);
-          tel.lon = j.value("lon", 0.0);
-          tel.alt_msl = j.value("alt_msl", 0.0);
-          tel.rel_alt = j.value("rel_alt", 0.0);
-          tel.vx_ned = j.value("vx_ned", 0.0);
-          tel.vy_ned = j.value("vy_ned", 0.0);
-          tel.vz_ned = j.value("vz_ned", 0.0);
-          tel.roll = j.value("roll", 0.0);
-          tel.pitch = j.value("pitch", 0.0);
-          tel.yaw = j.value("yaw", 0.0);
-          tel.armed = j.value("armed", false);
-          tel.mode = j.value("mode", "UNKNOWN");
-          tel.ts = j.value("ts", 0.0);
-          tel.connected = true;
+          const std::string type = j.value("type", std::string("telemetry"));
 
-          std::lock_guard<std::mutex> lock(tel_mutex_);
-          latest_telemetry_ = tel;
+          if (type == "status" || type == "error") {
+            AdapterEvent ev;
+            ev.kind = (type == "error") ? InboundKind::ERROR : InboundKind::STATUS;
+            ev.vehicle_id = j.value("vehicle_id", std::string(""));
+            ev.command = j.value("command", std::string(""));
+            ev.message = j.value("message", std::string(""));
+            ev.ts = j.value("ts", 0.0);
+            ev.proto = j.value("proto", kProtocolVersion);
+            std::lock_guard<std::mutex> lock(tel_mutex_);
+            latest_event_ = ev;
+          } else if (type == "measurement") {
+            // Transport passthrough: keep the metrics object verbatim (JSON string).
+            AdapterMeasurement m;
+            m.vehicle_id = j.value("vehicle_id", std::string(""));
+            m.ts = j.value("ts", 0.0);
+            m.proto = j.value("proto", kProtocolVersion);
+            m.payload_json = j.contains("metrics") ? j["metrics"].dump() : std::string("{}");
+            m.valid = true;
+            std::lock_guard<std::mutex> lock(tel_mutex_);
+            latest_measurement_ = m;
+          } else {
+            TelemetryState tel;
+            tel.kind = InboundKind::TELEMETRY;
+            tel.lat = j.value("lat", 0.0);
+            tel.lon = j.value("lon", 0.0);
+            tel.alt_msl = j.value("alt_msl", 0.0);
+            tel.rel_alt = j.value("rel_alt", 0.0);
+            tel.vx_ned = j.value("vx_ned", 0.0);
+            tel.vy_ned = j.value("vy_ned", 0.0);
+            tel.vz_ned = j.value("vz_ned", 0.0);
+            tel.roll = j.value("roll", 0.0);
+            tel.pitch = j.value("pitch", 0.0);
+            tel.yaw = j.value("yaw", 0.0);
+            tel.roll_rad = j.value("roll_rad", 0.0);
+            tel.pitch_rad = j.value("pitch_rad", 0.0);
+            tel.yaw_ned_rad = j.value("yaw_ned_rad", 0.0);
+            tel.gps_fix_type = j.value("gps_fix_type", 0);
+            tel.gps_satellites = j.value("gps_satellites", 0);
+            tel.battery_voltage = j.value("battery_voltage", 0.0);
+            tel.battery_current = j.value("battery_current", 0.0);
+            tel.battery_level = j.value("battery_level", 0.0);
+            tel.battery_valid = j.find("battery_voltage") != j.end();
+            tel.armed = j.value("armed", false);
+            tel.armable = j.value("armable", false);
+            tel.ekf_ready = j.value("ekf_ready", false);
+            tel.aerpaw_connected = j.value("connected", false);
+            tel.mode = j.value("mode", "UNKNOWN");
+            tel.vehicle_id = j.value("vehicle_id", std::string(""));
+            tel.mavlink_sysid = j.value("mavlink_sysid", 0);
+            tel.ts = j.value("ts", 0.0);
+            tel.proto = j.value("proto", kProtocolVersion);
+            tel.connected = true;
+
+            std::lock_guard<std::mutex> lock(tel_mutex_);
+            latest_telemetry_ = tel;
+            last_tel_time_ = std::chrono::steady_clock::now();
+            ever_received_tel_ = true;
+          }
         } catch (const std::exception & e) {
           std::cerr << "[IpcBridge] Telemetry parse error: " << e.what() << std::endl;
         }
@@ -159,6 +203,28 @@ TelemetryState IpcBridge::getTelemetry() const
 {
   std::lock_guard<std::mutex> lock(tel_mutex_);
   return latest_telemetry_;
+}
+
+AdapterEvent IpcBridge::getEvent() const
+{
+  std::lock_guard<std::mutex> lock(tel_mutex_);
+  return latest_event_;
+}
+
+AdapterMeasurement IpcBridge::getMeasurement() const
+{
+  std::lock_guard<std::mutex> lock(tel_mutex_);
+  return latest_measurement_;
+}
+
+double IpcBridge::telemetryAgeSeconds() const
+{
+  std::lock_guard<std::mutex> lock(tel_mutex_);
+  if (!ever_received_tel_) {
+    return std::numeric_limits<double>::infinity();
+  }
+  const auto dt = std::chrono::steady_clock::now() - last_tel_time_;
+  return std::chrono::duration<double>(dt).count();
 }
 
 }  // namespace aerpaw_platform

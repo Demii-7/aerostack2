@@ -1,111 +1,92 @@
 #!/usr/bin/env python3
-"""Triangle formation: leader flies a 50 m square at 25 m altitude.
+"""Triangle formation mission - thin runner over the experiment layer (Stage 9).
 
-Followers maintain a fixed NE lateral offset from the leader using
-position control. Works on all three AS2 platform backends:
-  - Multirotor Simulator
-  - Gazebo
-  - AERPAW Digital Twin / SITL
+All the *how* (vehicle I/O) is behind ``PlatformInterface``; the coordination and
+decision logic live in ``as2_experiment_aerpaw_multiuav.experiment``; the platform
+adapter (``as2_platform_aerpaw``) is not referenced here at all. A mission author
+writes against AeroStack2 behaviours, not AERPAW.
 
-Run from a sourced AS2 workspace with:
+Run (with the AERPAW subsystem + runners up, Config C / run_aerpaw_experiment.sh):
 
-  python3 triangle_formation.py
-
-Uses threading for concurrent multi-drone control (DroneInterface calls
-are synchronous/blocking).
+    python3 triangle_formation.py [num_drones]
 """
 
 import sys
-import time
 import threading
+import time
 
 import rclpy
-from as2_python_api.drone_interface import DroneInterface
+
+from as2_experiment_aerpaw_multiuav.experiment import (
+    DroneInterfacePlatform,
+    TrianglePatrolPolicy,
+    UnavailableRFSource,
+    assign_roles,
+    triangle_offsets,
+)
 
 ALTITUDE = 25.0
 SIDE = 50.0
 SPEED = 3.0
-OFFSETS = [(0, 0), (10, 0), (-10, 0)]
+# Leader path: square waypoints as (north, east).
+SQUARE = [(SIDE, 0.0), (SIDE, SIDE), (0.0, SIDE), (0.0, 0.0)]
 
 
-def _parallel(fn, drones, *args, **kwargs):
-    """Run fn(drone, *args, **kwargs) concurrently for each drone, wait all."""
-    threads = [
-        threading.Thread(target=fn, args=(d, *args), kwargs=kwargs)
-        for d in drones
-    ]
+def _parallel(fn, items, *args, **kwargs):
+    threads = [threading.Thread(target=fn, args=(it, *args), kwargs=kwargs) for it in items]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
 
 
-def _takeoff(drone, altitude, speed):
-    drone.takeoff(height=altitude, speed=speed)
+def _fly_vehicle(platform, path, speed):
+    for x, y, z in path:
+        platform.go_to(x, y, z, speed=speed)
 
 
-def _go_to(drone, x, y, z, speed):
-    drone.go_to.go_to(x, y, z, speed=speed)
-
-
-def _land(drone, speed):
-    drone.land(speed=speed)
-
-
-def run_mission():
+def run_mission(num_drones: int = 3) -> int:
     rclpy.init()
-    drones = [DroneInterface(f"drone{i}", verbose=True) for i in range(3)]
+    vehicles = [f"drone{i}" for i in range(num_drones)]
+    platforms = [DroneInterfacePlatform(vid) for vid in vehicles]
 
-    print("[triangle] Arming all drones...")
-    _parallel(lambda d: d.arm(), drones)
+    # Experiment logic: roles + geometry + decision policy (RF-aware when available).
+    plan = assign_roles(vehicles, triangle_offsets())
+    policy = TrianglePatrolPolicy(altitude=ALTITUDE, square=SQUARE, speed=SPEED)
+    rf = UnavailableRFSource().poll(vehicles)   # degrades to geometry-only
+    targets = policy.targets_for(plan, rf)
 
-    print(f"[triangle] Taking off all drones to {ALTITUDE} m...")
-    _parallel(_takeoff, drones, ALTITUDE, SPEED)
+    print("[triangle] arm + offboard + takeoff")
+    _parallel(lambda p: p.arm(), platforms)
+    _parallel(lambda p: p.takeoff(ALTITUDE, SPEED), platforms)
     time.sleep(8.0)
-
-    print("[triangle] Enabling offboard mode...")
-    _parallel(lambda d: d.offboard(), drones)
+    _parallel(lambda p: p.offboard(), platforms)
     time.sleep(1.0)
 
-    # Square waypoints: (north, east)
-    square = [
-        (SIDE, 0.0),
-        (SIDE, SIDE),
-        (0.0, SIDE),
-        (0.0, 0.0),
-    ]
-
-    for wp_north, wp_east in square:
-        print(f"[triangle] Flying to waypoint ({wp_north}, {wp_east})...")
-
-        def _wp(drone, _n=wp_north, _e=wp_east, _idx=0):
-            off_n, off_e = OFFSETS[_idx]
-            _go_to(drone, _e + off_e, _n + off_n, ALTITUDE, SPEED)
-
+    print("[triangle] fly leader path + follower offsets (decision from experiment layer)")
+    for i in range(len(policy.waypoints())):
         threads = [
-            threading.Thread(target=_wp, args=(d,), kwargs={"_idx": i})
-            for i, d in enumerate(drones)
+            threading.Thread(target=_fly_vehicle, args=(p, [targets[p.vehicle_id][i]], SPEED))
+            for p in platforms
         ]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
 
-    print("[triangle] Formation complete - landing...")
-    _parallel(_land, drones, 0.5)
-    time.sleep(5.0)
-
-    for d in drones:
-        d.disarm()
-
-    for d in drones:
-        d.destroy_node()
+    print("[triangle] land")
+    _parallel(lambda p: p.land(1.0), platforms)
+    for p in platforms:
+        p.close()
     rclpy.shutdown()
-    print("[triangle] Done!")
+    print("[triangle] done")
+    return 0
 
 
 if __name__ == "__main__":
+    n = int(sys.argv[1]) if len(sys.argv) > 1 else 3
     try:
-        run_mission()
+        sys.exit(run_mission(n))
     except KeyboardInterrupt:
         print("\n[triangle] Interrupted", file=sys.stderr)
+        sys.exit(130)

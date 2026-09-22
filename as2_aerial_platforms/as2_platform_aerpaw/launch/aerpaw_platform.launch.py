@@ -1,4 +1,10 @@
-"""Launch file for a single AERPAW platform drone."""
+"""Launch file for a single AERPAW platform drone.
+
+NOTE (Stage-2 ownership): here *AeroStack2* spawns the *AERPAW* aerpawlib runner,
+so this is a DEVELOPER / single-drone HARNESS ONLY.  Production ownership is
+AERPAW-first: AERPAW runs the experiment and starts the AS2 robotics subsystem
+(as2_stack.launch.py).  See docs/ARCHITECTURE.md §Ownership.
+"""
 
 __authors__ = 'AERPAW Bridge'
 __copyright__ = 'Copyright (c) 2024 Universidad Politecnica de Madrid'
