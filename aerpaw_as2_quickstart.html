@@ -1,0 +1,192 @@
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.phase{border:0.5px solid var(--border);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1rem}
+.phase-header{display:flex;align-items:center;gap:12px;margin-bottom:1rem}
+.badge{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;flex-shrink:0}
+.badge-purple{background:#EEEDFE;color:#3C3489}
+.badge-teal{background:#E1F5EE;color:#085041}
+.badge-amber{background:#FAEEDA;color:#633806}
+.phase-title{font-size:15px;font-weight:500;color:var(--text-primary)}
+.phase-sub{font-size:12px;color:var(--text-secondary);margin-top:1px}
+.steps{display:flex;flex-direction:column;gap:8px}
+.step{display:flex;gap:12px;align-items:flex-start}
+.step-num{width:20px;height:20px;border-radius:50%;background:var(--surface-1);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:var(--text-secondary);flex-shrink:0;margin-top:1px}
+.step-body{flex:1}
+.step-label{font-size:14px;color:var(--text-primary);font-weight:500;line-height:1.4}
+.step-detail{font-size:12px;color:var(--text-secondary);margin-top:2px;line-height:1.5}
+code{font-family:var(--font-mono);font-size:11px;background:var(--surface-1);border:0.5px solid var(--border);border-radius:4px;padding:0px 5px;color:var(--text-primary)}
+.codeblock{font-family:var(--font-mono);font-size:11px;background:var(--surface-1);border:0.5px solid var(--border);border-radius:8px;padding:10px 14px;margin-top:6px;color:var(--text-primary);line-height:1.8;white-space:pre}
+.divider{height:0.5px;background:var(--border);margin:0.75rem 0}
+.tip{font-size:12px;color:var(--text-secondary);background:var(--surface-1);border-radius:8px;padding:8px 12px;margin-top:8px;border-left:2px solid var(--border-strong);border-radius:0;padding-left:10px}
+.pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;margin-left:6px;font-weight:400}
+.pill-purple{background:#EEEDFE;color:#3C3489}
+.pill-teal{background:#E1F5EE;color:#085041}
+.pill-amber{background:#FAEEDA;color:#633806}
+</style>
+
+<h2 class="sr-only">Quick-start guide: run an AS2 mission on AERPAW</h2>
+
+<div style="padding:0 0 0.5rem">
+  <p style="font-size:13px;color:var(--text-secondary);margin-bottom:1rem">Three phases. Each builds on the previous. Total time: ~20 min first run.</p>
+
+  <div class="phase">
+    <div class="phase-header">
+      <div class="badge badge-purple"><i class="ti ti-pencil" aria-hidden="true"></i></div>
+      <div>
+        <div class="phase-title">Phase 1 — plan your mission <span class="pill pill-purple">AS2 GUI</span></div>
+        <div class="phase-sub">Your laptop · browser only</div>
+      </div>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-label">Open the AS2 web GUI</div>
+          <div class="step-detail">Navigate to your AS2 web interface. Draw waypoints on the map. Set altitude (min 25 m for AERPAW) and speed per waypoint.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-label">Add your drones</div>
+          <div class="step-detail">Name each drone namespace: <code>drone0</code>, <code>drone1</code>, <code>drone2</code>. Match the count to your AERPAW vehicle allocation.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-label">Download the mission file</div>
+          <div class="step-detail">Export as JSON. You get one file per drone, or a combined multi-UAV mission file. Save to your local machine.</div>
+          <div class="codeblock">drone0_mission.json
+drone1_mission.json
+drone2_mission.json</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-header">
+      <div class="badge badge-teal"><i class="ti ti-server" aria-hidden="true"></i></div>
+      <div>
+        <div class="phase-title">Phase 2 — set up AERPAW <span class="pill pill-teal">AERPAW console + E-VM</span></div>
+        <div class="phase-sub">VPN → SSH → E-VM terminal</div>
+      </div>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-label">Create the experiment on console.aerpaw.org</div>
+          <div class="step-detail">Add N portable nodes (drones) + any fixed radio nodes. Schedule your time slot. Start the experiment — AERPAW brings up the E-VMs.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-label">Connect via VPN + SSH into the E-VM</div>
+          <div class="codeblock">ssh -i ~/.ssh/aerpaw_key user@&lt;evm-ip&gt;</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-label">Copy your mission files to the E-VM</div>
+          <div class="codeblock">scp drone*_mission.json user@&lt;evm-ip&gt;:~/missions/</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-label">Launch the AERPAW platform bridge</div>
+          <div class="step-detail">One launch per drone. Replace the <code>conn</code> addresses with the MAVLink endpoints AERPAW assigned to your vehicles.</div>
+          <div class="codeblock">ros2 launch as2_platform_aerpaw aerpaw_platform.launch.py \
+  drone_id:=drone0 \
+  conn:=udpin://10.14.X.X:14550 \
+  use_aerpaw:=true
+
+ros2 launch as2_platform_aerpaw aerpaw_platform.launch.py \
+  drone_id:=drone1 \
+  conn:=udpin://10.14.X.Y:14550 \
+  use_aerpaw:=true</div>
+          <div class="tip">For the Digital Twin / SITL, use <code>use_aerpaw:=false</code> and <code>conn:=udpin://127.0.0.1:14550</code></div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <div class="step-label">Verify connection — check all drones are alive</div>
+          <div class="codeblock">ros2 topic echo /drone0/self_localization/pose
+ros2 topic echo /drone1/self_localization/pose</div>
+          <div class="tip">You should see GPS position updating at ~20 Hz. If not, check your MAVLink <code>conn</code> string.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-header">
+      <div class="badge badge-amber"><i class="ti ti-player-play" aria-hidden="true"></i></div>
+      <div>
+        <div class="phase-title">Phase 3 — run and watch <span class="pill pill-amber">E-VM + QGroundControl</span></div>
+        <div class="phase-sub">Run mission · watch in QGC</div>
+      </div>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-label">Open QGroundControl on your laptop</div>
+          <div class="step-detail">Connect to the AERPAW MAVLink stream over VPN. You'll see all drones on the NC State map — live position, altitude, battery.</div>
+          <div class="tip">QGC is read-only here. It monitors; AS2 commands.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-label">Run the mission</div>
+          <div class="step-detail">Back on the E-VM terminal, launch the experiment. All drones arm, take off, and execute your planned mission simultaneously.</div>
+          <div class="codeblock">ros2 launch as2_experiment_aerpaw_multiuav \
+  aerpaw_digital_twin.launch.py \
+  conn_drone0:=udpin://10.14.X.X:14550 \
+  conn_drone1:=udpin://10.14.X.Y:14550 \
+  use_aerpaw:=true
+
+python3 missions/your_mission.py</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-label">Watch in QGroundControl</div>
+          <div class="step-detail">Drones move on the map exactly as planned. If anything looks wrong, the safety pilot can take over in QGC at any time.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-label">Stop and clean up</div>
+          <div class="codeblock">Ctrl+C  (in mission terminal)
+ros2 lifecycle set /drone0/platform shutdown
+ros2 lifecycle set /drone1/platform shutdown</div>
+          <div class="tip">Then stop the experiment from the OEO console to release AERPAW resources.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="border:0.5px solid var(--border-success);border-radius:8px;padding:10px 14px;background:var(--bg-success);margin-top:0.5rem">
+    <p style="font-size:13px;color:var(--text-success);font-weight:500">First time? Run on the Digital Twin first</p>
+    <p style="font-size:12px;color:var(--text-success);margin-top:4px">Use <code style="background:none;border-color:var(--border-success)">use_aerpaw:=false</code> and local SITL connections. Identical workflow — no hardware risk.</p>
+  </div>
+</div>

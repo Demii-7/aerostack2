@@ -35,6 +35,9 @@
 build
 log
 install
+build_jazzy
+log_jazzy
+install_jazzy
 
 # Conda
 *.conda

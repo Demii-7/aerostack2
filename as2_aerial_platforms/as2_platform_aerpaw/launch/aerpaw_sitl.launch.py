@@ -27,7 +27,8 @@ def spawn_drones(context, *args, **kwargs):
 
     num_drones = int(LaunchConfiguration('num_drones').perform(context))
     conn_base = LaunchConfiguration('conn_base').perform(context)
-    use_sim_time = LaunchConfiguration('use_sim_time').perform(context)
+    use_sim_time = str(LaunchConfiguration('use_sim_time').perform(
+        context)).strip().lower() in ('1', 'true', 'yes', 'on')
     use_aerpaw = LaunchConfiguration('use_aerpaw').perform(context)
 
     conns = []
@@ -75,6 +76,7 @@ def spawn_drones(context, *args, **kwargs):
         actions.append(ExecuteProcess(
             cmd=runner_cmd,
             output='screen',
+            additional_env={'PYTHONPATH': ''},
         ))
 
     return actions
