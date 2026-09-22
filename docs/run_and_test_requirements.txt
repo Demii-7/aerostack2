@@ -16,6 +16,10 @@ It is split into three levels:
     Level 2 - Run Config A/B simulations            (Multirotor Simulator / Gazebo)
     Level 3 - Run Config C on the AERPAW DT / SITL  (aerpawlib + MAVLink)
 
+Scope: PREREQUISITES ONLY (what to install and where). The copy-paste run commands for
+each Config live in the experiment README; the step-by-step workflow lives in
+docs/E2E_MANUAL.md. Launch commands shown below are for dependency context.
+
 ----------------------------------------------------------------------------
 LEVEL 1 - BUILD AND UNIT-TEST (C++ platform only)
 ----------------------------------------------------------------------------
