@@ -16,6 +16,7 @@ Twin / SITL**, in addition to the AS2 **Multirotor Simulator** and **Gazebo** ba
 | See the **explicit, versioned interfaces** (AERPAW↔Adapter↔AS2↔Experiment) | [`INTERFACES.md`](INTERFACES.md) |
 | Learn how the AERPAW↔AS2 bridge works (reference) | [`as2_platform_aerpaw` README](../as2_aerial_platforms/as2_platform_aerpaw/README.md) |
 | Run the example 3‑drone mission / see the config commands | [`as2_experiment_aerpaw_multiuav` README](../as2_experiment_aerpaw_multiuav/README.md) |
+| Bring up the **standalone AERPAW emulator** and run its demo (no AS2) | [`AERPAW_EMULATOR.md`](AERPAW_EMULATOR.md) |
 
 Single source of truth per topic: **requirements** = what you need · **E2E** = the how‑to
 · **platform README** = bridge reference · **experiment README** = mission + run commands.
@@ -32,6 +33,7 @@ docs/
   INTERFACES.md                   explicit versioned interfaces (IF-1/2/3)
   AS2_CAPABILITIES.md             which AS2 behaviors run on AERPAW
   LAYERING.md                     experiment-logic vs platform-integration boundary
+  AERPAW_EMULATOR.md              standalone emulator stack + demo (no AS2)
 
 as2_aerial_platforms/as2_platform_aerpaw/     the platform bridge
   src/ + include/                C++ node + UDP-JSON IPC bridge

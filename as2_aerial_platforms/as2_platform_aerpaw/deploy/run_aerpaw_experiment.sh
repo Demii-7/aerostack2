@@ -61,6 +61,43 @@ if [ -z "${VEHICLE_IDS:-}" ]; then
   VEHICLE_IDS="${VEHICLE_IDS# }"
 fi
 
+# Per-drone IPC ports (default = fleet_config bases; else 15760/15761 + i*2).
+if [ -z "${CMD_PORTS:-}" ]; then
+  CMD_PORTS=""; TEL_PORTS=""
+  for i in $(seq 0 $((NUM_DRONES - 1))); do
+    CMD_PORTS="$CMD_PORTS $((15760 + i * 2))"
+    TEL_PORTS="$TEL_PORTS $((15761 + i * 2))"
+  done
+  CMD_PORTS="${CMD_PORTS# }"; TEL_PORTS="${TEL_PORTS# }"
+fi
+
+# FLEET_CONFIG (Stage 18): when set, the whole fleet (count, ids, namespaces, ports,
+# MAVLink endpoints, backend) is read from one YAML — no edits to this script.
+FLEET_CONFIG="${FLEET_CONFIG:-}"
+if [ -n "${FLEET_CONFIG}" ]; then
+  log "Deriving fleet from ${FLEET_CONFIG}"
+  # shellcheck disable=SC1090
+  eval "$(FLEET_CONFIG_PATH="${FLEET_CONFIG}" python3 - <<'PY'
+import os, shlex, sys
+sys.path.insert(0, os.path.join(os.environ.get("WS_DIR", os.path.expanduser("~/aerpaw_ws")),
+                                "as2_aerial_platforms/as2_platform_aerpaw/launch"))
+import fleet_config as fc
+f = fc.load_fleet(os.environ["FLEET_CONFIG_PATH"])
+vids = [v["id"] for v in f["vehicles"]]
+conns = [v["conn"] for v in f["vehicles"]]
+cmd = [str(v["cmd_port"]) for v in f["vehicles"]]
+tel = [str(v["tel_port"]) for v in f["vehicles"]]
+print(f"NUM_DRONES={len(f['vehicles'])}")
+print(f"VEHICLE_IDS={shlex.quote(' '.join(vids))}")
+print(f"CONNS={shlex.quote(' '.join(conns))}")
+print(f"CMD_PORTS={shlex.quote(' '.join(cmd))}")
+print(f"TEL_PORTS={shlex.quote(' '.join(tel))}")
+print(f"AERPAW_BACKEND={shlex.quote(f['vehicles'][0]['backend'])}")
+print(f"USE_AERPAW={'true' if f['vehicles'][0]['backend'] != 'sitl' else 'false'}")
+PY
+)"
+fi
+
 log() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 PIDS=()
 cleanup() {
@@ -90,28 +127,52 @@ command -v aerpawlib >/dev/null || { echo "aerpawlib not on PATH" >&2; exit 1; }
 
 # ---- 1. AERPAW starts the AS2 ROBOTICS SUBSYSTEM (this is the key inversion) -
 log "AERPAW -> starting AeroStack2 robotics subsystem (${NUM_DRONES} drones)"
+FLEET_ARGS=()
+[ -n "${FLEET_CONFIG}" ] && FLEET_ARGS+=(fleet_config:="${FLEET_CONFIG}")
 ros2 launch as2_platform_aerpaw as2_stack.launch.py \
     num_drones:="${NUM_DRONES}" use_aerpaw:="${USE_AERPAW}" \
     platform_backend:="${AERPAW_BACKEND}" \
-    vehicle_ids:="${VEHICLE_IDS}" &
-PIDS+=("$!")
+    vehicle_ids:="${VEHICLE_IDS}" \
+    "${FLEET_ARGS[@]}" &
+AS2_PID=$!
+PIDS+=("$AS2_PID")
 
-# give the platform nodes a moment to bind their UDP IPC telemetry ports
-sleep 5
+# AeroStack2 startup failure -> abort safely (don't launch vehicles into a dead
+# robotics layer). Wait for the first platform node to appear, bounded by a timeout.
+log "Waiting for the AeroStack2 subsystem to come up (platform node)..."
+AS2_READY=0
+for _ in $(seq 1 30); do
+  if ! kill -0 "$AS2_PID" 2>/dev/null; then
+    echo "ERROR: AeroStack2 subsystem exited during startup; aborting." >&2
+    exit 1
+  fi
+  if ros2 node list 2>/dev/null | grep -q "/drone0/platform"; then
+    AS2_READY=1; break
+  fi
+  sleep 1
+done
+if [ "$AS2_READY" != "1" ]; then
+  echo "ERROR: AeroStack2 platform node did not come up within 30s; aborting." >&2
+  exit 1
+fi
 
 # ---- 2. AERPAW starts the per-drone aerpawlib bridge runners ----------------
 # shellcheck disable=SC2206
 CONN_ARR=(${CONNS})
 # shellcheck disable=SC2206
 VID_ARR=(${VEHICLE_IDS})
+# shellcheck disable=SC2206
+CMD_ARR=(${CMD_PORTS})
+# shellcheck disable=SC2206
+TEL_ARR=(${TEL_PORTS})
 RUNNER="${WS_DIR}/as2_aerial_platforms/as2_platform_aerpaw/aerpawlib_runner/aerpaw_as2_runner.py"
 [ -f "$RUNNER" ] || RUNNER="$(ros2 pkg prefix as2_platform_aerpaw)/share/as2_platform_aerpaw/aerpawlib_runner/aerpaw_as2_runner.py"
 
 for i in $(seq 0 $((NUM_DRONES - 1))); do
   conn="${CONN_ARR[$i]:-udpin://127.0.0.1:$((14550 + i * 10))}"
   vid="${VID_ARR[$i]:-drone${i}}"
-  cmd_port=$((15760 + i * 2))
-  tel_port=$((15761 + i * 2))
+  cmd_port="${CMD_ARR[$i]:-$((15760 + i * 2))}"
+  tel_port="${TEL_ARR[$i]:-$((15761 + i * 2))}"
   log "AERPAW -> aerpawlib runner (drone${i} = ${vid}) conn=${conn} cmd=${cmd_port} tel=${tel_port}"
   AERPAW_ARGS=()
   [ "${USE_AERPAW}" = "true" ] || AERPAW_ARGS+=(--no-aerpaw-environment)

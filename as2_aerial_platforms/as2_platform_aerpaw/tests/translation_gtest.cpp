@@ -37,6 +37,7 @@
 #include "as2_platform_aerpaw/command_translation.hpp"
 #include "as2_platform_aerpaw/frame_conversions.hpp"
 #include "as2_platform_aerpaw/state_translation.hpp"
+#include "as2_platform_aerpaw/telemetry_guard.hpp"
 #include "as2_platform_aerpaw/vehicle_identity.hpp"
 
 using aerpaw_platform::GeoHome;
@@ -430,4 +431,47 @@ TEST(FrameRoundTrip, YawHeadingIsInverse)
     }
     EXPECT_NEAR(d - M_PI, 0.0, 1e-9);
   }
+}
+
+// Stage 17: input guards keep malformed / stale data from propagating.
+using aerpaw_platform::guard::command_is_valid;
+using aerpaw_platform::guard::telemetry_is_fresh;
+using aerpaw_platform::guard::telemetry_is_valid;
+
+TEST(TelemetryGuard, RejectsInvalidSamples)
+{
+  TelemetryState t;
+  t.kind = aerpaw_platform::InboundKind::TELEMETRY;
+  t.lat = 35.727; t.lon = -78.698; t.alt_msl = 85.0; t.rel_alt = 25.0;
+  EXPECT_TRUE(telemetry_is_valid(t));
+  // NaN position -> invalid
+  TelemetryState bad = t; bad.lat = std::nan("");
+  EXPECT_FALSE(telemetry_is_valid(bad));
+  // out-of-range lat -> invalid
+  TelemetryState oor = t; oor.lat = 120.0;
+  EXPECT_FALSE(telemetry_is_valid(oor));
+  // (0,0) no-fix sentinel -> invalid
+  TelemetryState zero = t; zero.lat = 0.0; zero.lon = 0.0;
+  EXPECT_FALSE(telemetry_is_valid(zero));
+  // NaN velocity -> invalid
+  TelemetryState nanv = t; nanv.vy_ned = std::nan("");
+  EXPECT_FALSE(telemetry_is_valid(nanv));
+}
+
+TEST(TelemetryGuard, RejectsStaleOrFrozen)
+{
+  // fresh: recent age + advancing ts
+  EXPECT_TRUE(telemetry_is_fresh(0.1, 1.0, 100.0, 99.0));
+  // stale by age
+  EXPECT_FALSE(telemetry_is_fresh(2.0, 1.0, 100.0, 99.0));
+  // frozen: same ts as last accepted
+  EXPECT_FALSE(telemetry_is_fresh(0.1, 1.0, 100.0, 100.0));
+}
+
+TEST(TelemetryGuard, CommandValidity)
+{
+  EXPECT_TRUE(command_is_valid(Vec3{1.0, 2.0, 3.0}, 0.5));
+  Vec3 nanpos{std::nan(""), 0.0, 0.0};
+  EXPECT_FALSE(command_is_valid(nanpos, 0.0));
+  EXPECT_FALSE(command_is_valid(Vec3{0.0, 0.0, 0.0}, std::nan("")));
 }

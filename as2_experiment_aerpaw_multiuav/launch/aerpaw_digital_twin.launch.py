@@ -60,6 +60,7 @@ def get_all_actions(context, *args, **kwargs):
             'use_sim_time': LaunchConfiguration('use_sim_time'),
             'use_aerpaw': LaunchConfiguration('use_aerpaw'),
             'platform_backend': LaunchConfiguration('platform_backend'),
+            'fleet_config': LaunchConfiguration('fleet_config'),
         }.items(),
     ))
 
@@ -100,6 +101,8 @@ def generate_launch_description() -> LaunchDescription:
                               description='true for AERPAW DT, false for SITL'),
         DeclareLaunchArgument('platform_backend', default_value='',
                               description='sitl|digital_twin|physical (empty=derive from use_aerpaw)'),
+        DeclareLaunchArgument('fleet_config', default_value='',
+                              description='Fleet YAML path (empty=platform default config/fleet.yaml)'),
     ]
 
     # Per-drone connection strings (up to 10 drones)

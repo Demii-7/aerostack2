@@ -239,6 +239,38 @@ AERPAW sample time is carried as `ts` in the IPC message for cross-reference.
 | SPEED (yaw speed, local FLU) | `0b01000100` | `pid_speed` velocity |
 | POSITION (yaw angle, ENU) | `0b01100000` | `go_to` |
 
+## Fleet configuration (`config/fleet.yaml`) — Stage 18
+
+Change the **number of UAVs** and all platform config in one data file — no source
+edits. `launch/fleet_config.py::load_fleet` resolves it (and rejects duplicate
+namespace/port/id).
+
+```yaml
+backend: digital_twin      # sitl | digital_twin | physical
+namespace_prefix: drone
+cmd_port_base: 15760
+tel_port_base: 15761
+port_stride: 2
+frames: {earth: earth, map: map, odom: odom, base: base_link}
+uav_defaults: {takeoff_altitude: 25.0, link_timeout: 1.0, position_keepalive: 0.5}
+vehicles:                  # length == number of UAVs
+  - id: uav-north
+  - id: uav-east
+  - id: uav-south          # per-vehicle: conn, namespace, cmd_port, backend, params...
+```
+
+Use it:
+
+```bash
+ros2 launch as2_platform_aerpaw as2_stack.launch.py fleet_config:=config/fleet.yaml
+# ad-hoc overrides (precedence: arg > use_aerpaw > fleet.yaml):
+ros2 launch as2_platform_aerpaw as2_stack.launch.py num_drones:=2 platform_backend:=physical
+FLEET_CONFIG=$PWD/config/fleet.yaml ./deploy/run_aerpaw_experiment.sh   # AERPAW orchestrator
+```
+
+Per-node params live in `config/platform_params.yaml`; frames are also `as2::Node`
+params (`earth_frame_id`, `odom_frame_id`, `base_frame_id`, …).
+
 ## Configuration (`config/platform_params.yaml`)
 
 ```yaml
@@ -321,12 +353,35 @@ src/ + include/          aerpaw_platform (node) + ipc_bridge (UDP JSON)
   vehicle_identity.hpp   drone{i} <-> ports 15760+i*2  (multi-UAV map)
   adapter_types.hpp      PlatformBackend (sitl/dt/physical), GeoHome
 aerpawlib_runner/        aerpaw_as2_runner.py (AERPAW-side bridge; can start AS2 subsystem)
-config/                  control_modes.yaml, platform_params.yaml
-launch/                  as2_stack.launch.py (AS2 subsystem, AERPAW-started)
+config/                  control_modes.yaml, platform_params.yaml, fleet.yaml (Stage 18)
+launch/                  as2_stack.launch.py (AS2 subsystem, fleet-config driven)
+                         fleet_config.py     (declarative fleet loader: config/fleet.yaml)
                          aerpaw_platform/sitl.launch.py (dev harness)
 deploy/                  cvm_setup.sh, qgc_tunnel.sh, run_aerpaw_experiment.sh (AERPAW-first)
 tests/                   ipc_bridge_gtest, aerpaw_platform_gtest, translation_gtest
 ```
+
+## Safe failure handling (Stage 17)
+
+Malformed or stale data never silently reaches AeroStack2 (`telemetry_guard.hpp` + node
+gates):
+
+- **Invalid telemetry** (NaN / out-of-range / (0,0) no-fix / non-finite attitude) →
+  **dropped** (throttled WARN + count); never published as odom/gps/imu; home origin only
+  latched from valid data.
+- **Stale/frozen telemetry** → published only when the link is fresh AND the packet `ts`
+  advanced; the adapter **stops re-emitting** the last sample (the link watchdog flips
+  `platform_info.connected=false`).
+- **Malformed command** (non-finite pose/twist) → dropped, service/command returns false.
+- **Unsupported command** → rejected at `set_platform_control_mode` (see *Command path*).
+- **Adapter startup failure** (IPC port busy) → `RCLCPP_FATAL` + throw (node exits; no
+  half-dead "up" platform). **AeroStack2 startup failure** → `run_aerpaw_experiment.sh`
+  aborts rather than launching vehicles into a dead robotics layer.
+- **Missing/stale wireless measurement** → `TopicMeasurementSource(max_age_s)` reports it
+  *unavailable*, so the policy degrades to geometry (never acts on frozen RF).
+
+Mission-level failsafe (RTL/land) stays in AeroStack2, fed by truthful
+`platform_info.connected`. Unknown stays unknown — nothing is fabricated to "recover".
 
 ## Limitations
 

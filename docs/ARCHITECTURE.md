@@ -70,11 +70,9 @@ is now wiring only and holds no coordinate math and no robotics algorithm.
 
 - **Compiles / built**: `install_jazzy/as2_platform_aerpaw/lib/as2_platform_aerpaw/as2_platform_aerpaw_node`
   is present; `install_jazzy/as2_experiment_aerpaw_multiuav` launch+missions installed.
-  **Verified in this workspace (Stages 3–14)**: `as2_platform_aerpaw` rebuilds clean on the
-  conda `jazzy` ROS env (`colcon build` OK) and its **34 functional gtests pass**
-  (`translation_gtest` 28, `ipc_bridge_gtest` 3, `aerpaw_platform_gtest` 3). Plus **19 Python
-  tests** in `as2_experiment_aerpaw_multiuav` (closed-loop, multi-UAV, layering incl.
-  environment-agnostic + ROS-2-boundary guards).
+  **Verified in this workspace (Stages 3–18)**: `as2_platform_aerpaw` rebuilds clean on the
+  conda `jazzy` ROS env (`colcon build` OK); **37 functional gtests + 4 fleet-config ctests
+  pass**. Plus **27 Python tests** in `as2_experiment_aerpaw_multiuav`.
 - **Documented pass levels** (`docs/README.md §Status`): Level-1 build+unit tests on Humble;
   Config A flies; Config B on Gazebo Harmonic/Jazzy; Config C **SITL endpoints validated**.
 - **Still unverifiable in *this* shell**: **`aerpawlib` is not importable** here, so the
@@ -508,3 +506,64 @@ The adapter IS the boundary — that is appropriate.
 no `ros2`/`rclpy`/`as2_*`/msg references in code) and
 `test_layering.test_experiment_core_is_ros_free` (pure core has none; boundary impls import
 ROS lazily, never at module top level).
+
+## 17. Safe failure handling (Stage 17)
+
+Malformed or stale data must never silently propagate into AeroStack2. Guards, all in
+the adapter/transport (the robotics boundary):
+
+| Failure | Detection | Safe behaviour |
+|---|---|---|
+| Lost AERPAW connection / lost UAV telemetry | link watchdog: `telemetryAgeSeconds() > link_timeout` | `platform_info.connected=false` + ERROR log; AS2 controller/behaviours own the mission-level failsafe |
+| **Stale telemetry propagating** | freshness gate: **only publish when the link is fresh AND the packet `ts` advanced** | the adapter **stops republishing** the last packet (previously it re-emitted a frozen sample at 20 Hz) |
+| Invalid vehicle state | `guard::telemetry_is_valid` (finite, |lat|≤90/|lon|≤180, not (0,0) no-fix, finite vel/attitude) | drop the sample (throttled WARN + count); never publish a garbage odom/gps/imu; home origin only set from valid data |
+| Invalid / malformed command | `guard::command_is_valid` (finite pose/yaw, finite twist) | drop, return false, throttled WARN; never forward NaN setpoints |
+| Unsupported command | `command_capability` matrix (Stage 6) | rejected at `set_platform_control_mode` (service returns failure) + one-shot log |
+| Adapter startup failure (IPC bind) | `IpcBridge::isRunning()` after `start()` | `RCLCPP_FATAL` + throw → node exits (no half-dead "up" platform) |
+| AeroStack2 startup failure | `run_aerpaw_experiment.sh` polls `ros2 node list` for `/drone0/platform` + launch PID | abort the experiment (don't launch vehicles into a dead robotics layer) |
+| Lost ROS 2 connection | AS2-side; platform reports `connected=false`; watchdog flips it | behaviours observe platform status |
+| Missing / stale wireless measurement | `TopicMeasurementSource(max_age_s)`: rx-age > max | `RFMetrics` reported **unavailable** → policy degrades to geometry (no frozen RF) |
+
+**Principles honoured:** explicit handling (drop + count + throttled log, never silent);
+safe behaviour where one exists (fail-fast on startup, don't publish stale/invalid, degrade
+measurements); no fabricated recovery values — unknown stays unknown (Stage 5). The
+mission-level failsafe (RTL/land on link loss) remains AS2's, fed by truthful
+`platform_info.connected`.
+
+**Tested:** `TelemetryGuard.{RejectsInvalidSamples,RejectsStaleOrFrozen,CommandValidity}`,
+`ipc_bridge.MeasurementIsTransportedVerbatim`, `test_failure_handling` (measurement
+staleness/absence, malformed RF payload), plus prior capability/link tests.
+
+## 18. Configuration (Stage 18) — fleet & platform are data, not code
+
+Nothing fleet- or vehicle-specific is hard-coded in source. A researcher changes the
+**number of UAVs** and all relevant platform config by editing one file, not code.
+
+| Kind | Where configured | Was (pre-Stage 18) |
+|------|------------------|--------------------|
+| Vehicle count / IDs / namespaces | `config/fleet.yaml` (`vehicles:` list) | hardcoded `drone{i}` loops in launch |
+| IPC ports | `fleet.yaml` `cmd_port_base`/`tel_port_base`/`port_stride` (per-vehicle override) | literal `15760+i*2` in launch + script |
+| MAVLink endpoints (IP) | `fleet.yaml` per-vehicle `conn` (or launch/orchestrator `CONNS`) | literal `udpin://127.0.0.1:...` |
+| Backend (DT/physical/SITL) | `fleet.yaml` `backend` / per-vehicle | hardcoded `use_aerpaw` ternary |
+| TF frame names | `fleet.yaml` `frames:` → node params (`earth_frame_id`…, which `as2::Node` already reads) | `f'{ns}/base_link'` literals |
+| Topic names | `as2_names` constants + `aerpaw/measurements` (unchanged; already indirect) | — |
+| Per-UAV params (takeoff alt, link timeout, position-update gate, cmd/info freq) | `fleet.yaml` `uav_defaults` + per-vehicle; `platform_params.yaml` | scattered |
+| Experiment params | `as2_experiment_aerpaw_multiuav/config/three_drone_world.yaml` + mission args | — |
+
+Mechanism:
+- **`launch/fleet_config.py::load_fleet(path, num_drones)`** resolves `config/fleet.yaml`
+  into concrete per-vehicle settings (unique namespace/port/id, conn, backend, merged
+  params) and **validates** no collisions (duplicate namespace/port/id → raise).
+- **`as2_stack.launch.py`** consumes it: `fleet_config:=<yaml>` sets the whole fleet;
+  `num_drones`/`platform_backend`/`vehicle_ids`/`use_aerpaw` launch args override the file
+  for ad-hoc runs (precedence: explicit arg > `use_aerpaw` > fleet.yaml).
+- **`deploy/run_aerpaw_experiment.sh`**: `FLEET_CONFIG=<yaml>` derives count, ids, conns,
+  ports, backend from the same file (via the loader) for the AERPAW-side runners too.
+
+So scaling the fleet is: edit `fleet.yaml` (add/remove a `vehicles:` entry) or
+`ros2 launch … as2_stack.launch.py num_drones:=N`. No C++/Python source changes.
+
+**Tested:** `tests/fleet_config_test.py` (4, runs via ctest `colcon test`): shipped fleet
+resolves with unique namespaces/ports; vehicle count is config-only (5 via `num_drones`);
+per-vehicle overrides (`conn`, `namespace`, `takeoff_altitude`, backend) apply; duplicate
+namespace rejected. IF-1 version + node params already cover the rest.

@@ -92,19 +92,39 @@ class TopicMeasurementSource:
 
     TOPIC = "aerpaw/measurements"
 
-    def __init__(self, node, ns_to_id: Dict[str, str]) -> None:
-        """node: an rclpy Node; ns_to_id: maps each vehicle namespace -> vehicle id."""
+    def __init__(self, node, ns_to_id: Dict[str, str], max_age_s: float = 5.0) -> None:
+        """node: an rclpy Node; ns_to_id: maps each vehicle namespace -> vehicle id.
+
+        max_age_s: a measurement older than this (or never received) is reported as
+        UNAVAILABLE on poll(), so a stale/dropped RF feed degrades gracefully instead
+        of feeding the policy frozen values (Stage 17).
+        """
         from std_msgs.msg import String  # lazy
 
         self._latest: Dict[str, RFMetrics] = {}
+        self._rx_at: Dict[str, float] = {}
+        self._max_age_s = max_age_s
         for ns, vid in ns_to_id.items():
             topic = f"/{ns}/{self.TOPIC}" if ns else f"/{self.TOPIC}"
             node.create_subscription(String, topic, self._make_cb(vid), 10)
 
     def _make_cb(self, vehicle_id: str):
+        import time as _t
+
         def cb(msg) -> None:
             self._latest[vehicle_id] = RFMetrics.from_json(vehicle_id, msg.data)
+            self._rx_at[vehicle_id] = _t.monotonic()
         return cb
 
     def poll(self, vehicle_ids: List[str]) -> Dict[str, RFMetrics]:
-        return {vid: self._latest.get(vid, RFMetrics(vehicle_id=vid)) for vid in vehicle_ids}
+        import time as _t
+        now = _t.monotonic()
+        out: Dict[str, RFMetrics] = {}
+        for vid in vehicle_ids:
+            m = self._latest.get(vid)
+            age = now - self._rx_at.get(vid, float("-inf"))
+            if m is None or age > self._max_age_s:
+                out[vid] = RFMetrics(vehicle_id=vid)  # stale/absent -> unavailable
+            else:
+                out[vid] = m
+        return out

@@ -13,3 +13,12 @@ if(GTEST_SOURCE)
     target_link_libraries(${PROJECT_NAME}_${TEST_NAME} ament_index_cpp::ament_index_cpp gtest_main ${PROJECT_NAME} nlohmann_json::nlohmann_json)
   endforeach()
 endif()
+
+# Stage 18: fleet-config loader test (pure python; unittest, no ROS/pytest runtime).
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+  add_test(NAME fleet_config_test
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/fleet_config_test.py)
+  set_tests_properties(fleet_config_test PROPERTIES
+    ENVIRONMENT "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/../launch")
+endif()

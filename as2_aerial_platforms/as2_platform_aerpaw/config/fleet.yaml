@@ -1,0 +1,46 @@
+# Fleet + platform configuration (Stage 18). Change the fleet HERE — no source edits.
+#
+# Consumed by launch/as2_stack.launch.py (via launch/fleet_config.py) and the
+# AERPAW-first orchestrator deploy/run_aerpaw_experiment.sh. Override at launch with
+#   ros2 launch as2_platform_aerpaw as2_stack.launch.py fleet_config:=/path/to/my_fleet.yaml
+# or FLEET_CONFIG=/path/to/my_fleet.yaml for the orchestrator.
+
+# Number of UAVs == length of `vehicles`. Add/remove entries to scale the fleet.
+namespace_prefix: drone          # default vehicle{i} namespace when not set per-vehicle
+cmd_port_base: 15760             # IPC command port for index 0
+tel_port_base: 15761             # IPC telemetry port for index 0
+port_stride: 2                   # per-index port step
+
+mavlink_port_base: 14550         # default SITL MAVLink UDP port for index 0
+mavlink_port_stride: 10          # per-index MAVLink port step (local dev only)
+
+backend: digital_twin            # sitl | digital_twin | physical  (AERPAW environment)
+
+# TF frame ids (also overridable per platform node param).
+frames:
+  earth: earth
+  map: map
+  odom: odom
+  base: base_link
+
+# Defaults applied to every UAV; each vehicle may override any of these.
+uav_defaults:
+  takeoff_altitude: 25.0         # m (AERPAW copter min safe on DT)
+  link_timeout: 1.0              # s of silence before link is declared LOST
+  position_update_min_distance: 0.5   # m  (online-reference change gate)
+  position_update_min_yaw: 0.1        # rad
+  position_keepalive: 0.5             # s
+  # cmd_freq: 100.0
+  # info_freq: 10.0
+
+# One entry per AERPAW UAV. Only `id` is required; everything else is optional and
+# falls back to the defaults above (namespace/port/conn derive from index).
+vehicles:
+  - id: uav-north
+  - id: uav-east
+  - id: uav-south
+    # Example per-vehicle overrides (uncomment / adapt for a real testbed):
+    # namespace: drone2
+    # conn: udpin://192.168.32.12:14550     # physical testbed E-VM endpoint
+    # backend: physical
+    # takeoff_altitude: 30.0
